@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">Moment of GroundTruth</title>
+  <desc id="desc">A buried gas pipeline runs through layered earth, with a marked sample point above it.</desc>
+  <rect width="1200" height="420" fill="#f7f1e4"/>
+  <rect y="0" width="1200" height="118" fill="#dbe4d0"/>
+  <path d="M0 150 Q160 126 320 152 T640 150 T960 151 T1200 143 V244 H0Z" fill="#c88a5c"/>
+  <path d="M0 225 Q190 193 390 229 T780 221 T1200 230 V330 H0Z" fill="#9c674b"/>
+  <path d="M0 300 Q160 276 350 306 T720 300 T1200 306 V420 H0Z" fill="#68483a"/>
+  <path d="M0 346 Q170 325 360 350 T760 345 T1200 352" fill="none" stroke="#d7b479" stroke-width="4" opacity=".8"/>
+  <path d="M0 267 Q170 248 360 270 T760 265 T1200 272" fill="none" stroke="#e1b987" stroke-width="3" opacity=".8"/>
+  <path d="M140 283 H1060" fill="none" stroke="#273d3a" stroke-width="28" stroke-linecap="round"/>
+  <path d="M140 283 H1060" fill="none" stroke="#a9c5b7" stroke-width="14" stroke-linecap="round"/>
+  <path d="M650 159 V253" fill="none" stroke="#2f463d" stroke-width="5" stroke-dasharray="8 8"/>
+  <circle cx="650" cy="159" r="13" fill="#f2d89e" stroke="#68483a" stroke-width="5"/>
+  <path d="M650 273 l12 10 -12 10 -12-10z" fill="#f2d89e"/>
+  <text x="66" y="72" fill="#293d35" font-family="Georgia, serif" font-size="35" font-weight="700">A story written above the line</text>
+  <text x="68" y="105" fill="#526657" font-family="Arial, sans-serif" font-size="17">Read the report. Trace the clues. Find the cause.</text>
+  <text x="887" y="272" fill="#f7f1e4" font-family="Arial, sans-serif" font-size="16" letter-spacing="2">BURIED PIPELINE</text>
+  <text x="70" y="389" fill="#f7f1e4" font-family="Arial, sans-serif" font-size="15" letter-spacing="1.5">STRATA / SIGNAL / GROUND TRUTH</text>
+</svg>

@@ -250,6 +250,14 @@ The repository is a small project shell today:
 
 The actual GitHub repository path remains [`sakina-saifuddin/GroundTruth`](https://github.com/sakina-saifuddin/GroundTruth), and the local checkout folder is `GroundTruth`. Both names are left unchanged.
 
+To check out this documentation branch, use the existing repository slug and folder name:
+
+```text
+git clone https://github.com/sakina-saifuddin/GroundTruth.git
+cd GroundTruth
+git switch docs/readme-story
+```
+
 ### Reproduce the README charts
 
 1. Download the public gas transmission and gathering incident files from [PHMSA’s pipeline incident data page](https://www.phmsa.dot.gov/data-and-statistics/pipeline/pipeline-incident-20-year-trends). The supplied project CSV is not tracked in this repository.

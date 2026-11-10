@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" role="img" aria-labelledby="title desc">
+  <title id="title">App screenshot placeholder</title>
+  <desc id="desc">A simple mock screen with a narrative box and an empty predicted-cause panel. It is not a screenshot of a running app.</desc>
+  <rect width="1000" height="560" rx="18" fill="#f7f1e4"/>
+  <rect x="1" y="1" width="998" height="558" rx="18" fill="none" stroke="#9c674b" stroke-width="2"/>
+  <rect x="1" y="1" width="998" height="64" rx="18" fill="#293d35"/>
+  <path d="M1 48 H999 V65 H1Z" fill="#293d35"/>
+  <circle cx="34" cy="33" r="8" fill="#d7b479"/>
+  <text x="58" y="40" fill="#f7f1e4" font-family="Arial, sans-serif" font-size="20" font-weight="700">Moment-of-GroundTruth</text>
+  <text x="62" y="112" fill="#293d35" font-family="Arial, sans-serif" font-size="25" font-weight="700">Paste an incident narrative</text>
+  <rect x="62" y="136" width="876" height="190" rx="8" fill="#fffdf8" stroke="#c7b59d" stroke-width="2"/>
+  <text x="86" y="178" fill="#7b756c" font-family="Arial, sans-serif" font-size="17">The app interface is not tracked in this repository yet.</text>
+  <rect x="62" y="355" width="206" height="52" rx="7" fill="#9c674b"/>
+  <text x="96" y="388" fill="#ffffff" font-family="Arial, sans-serif" font-size="17" font-weight="700">Predict cause</text>
+  <rect x="62" y="438" width="876" height="66" rx="8" fill="#e7e0d1"/>
+  <text x="86" y="479" fill="#526657" font-family="Arial, sans-serif" font-size="18">APP SCREENSHOT PLACEHOLDER — replace when the app is available</text>
+</svg>

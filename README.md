@@ -81,6 +81,8 @@ The supplied CSV contains 3,027 labeled narratives. Its columns are `REPORT_NUMB
 
 The source is public [PHMSA Gas Transmission and Gathering Incident Data](https://www.phmsa.dot.gov/data-and-statistics/pipeline/pipeline-incident-20-year-trends), from the U.S. Department of Transportation’s Pipeline and Hazardous Materials Safety Administration (PHMSA). Pipeline operators submit the reports on Form PHMSA F 7100.2. The project merged the 2002–2009 historical file with the 2010–present file, removed rows without a narrative, and mapped older cause labels into the current eight categories.
 
+One record with an empty narrative was removed, leaving 3,026 narratives.
+
 ### Incidents by cause
 
 Counts and percentages below were computed from the supplied CSV. Percentages are rounded to one decimal place.
@@ -118,13 +120,20 @@ Text was cleaned by removing HTML, fixing whitespace, and converting to lowercas
 
 | Partition | Share | Narratives |
 |---|---:|---:|
-| Train | 70% | 2,119 |
-| Validation | 15% | 454 |
-| Test | 15% | 454 |
+| Train | 70% | 2,118 |
+| Validation | 15% | 453 |
+| Test | 15% | 455 |
 
-![Bar chart of the planned stratified train, validation, and test split: 2,119, 454, and 454 narratives.](docs/images/chart-data-split.png)
+![Bar chart illustrating the earlier planned stratified split of 2,119 training, 454 validation, and 454 test narratives.](docs/images/chart-data-split.png)
 
-*The partition sizes sum to 3,027. The exact row assignments depend on the split implementation and seed.*
+*This illustration shows the earlier approximate split. The prepared files use the exact sizes in the table above and are reproducible with seed 42.*
+
+### Reproduce the data split
+
+```powershell
+pip install -r requirements.txt
+python scripts/prepare_data.py
+```
 
 ## Chapter 4 — Three drills, one dig site
 

@@ -30,23 +30,19 @@ Experiment A uses the original training split with the Phase 1 class weights:
 python sakina/scripts/run_experiment_a.py
 ```
 
-Experiment B uses extra synthetic narratives without class weighting. It
-requires a separately reviewed `data/processed/synthetic_train.csv` containing
-`narrative_clean`, `CAUSE`, and `label`; this project does not fabricate or
-auto-generate those narratives. The 300-example rule identifies six training
-causes below the threshold in the verified Phase 1 split, so the synthetic file
-must bring all six to at least 300. The current Phase 1 counts include
-EXCAVATION DAMAGE (251), in addition to the five classes named in the
-generation note. The augmented output is written to
-`sakina/processed/augmented_train.csv` to keep Phase 1 files unchanged.
+Experiment B trains on `data/experiment2/train.csv` (the real training rows plus
+681 validated synthetic narratives, every class at least 300 rows) with no class
+weighting. Validation and test use `data/experiment2/val.csv` and `test.csv`,
+which are identical to the Phase 1 splits. See `data/experiment2/README.md` for
+how the synthetic rows were generated and checked.
 
 ```bash
 python sakina/scripts/run_experiment_b.py
 ```
 
-The oversampling script checks label-map consistency, duplicate narratives,
-and overlap with validation and test before writing the augmented training set.
-It raises a clear error if the synthetic file is missing or fails a check.
+Both experiments re-encode every narrative through BERT at up to 512 tokens each
+epoch, so use a GPU. `sakina/colab_run.ipynb` runs A and B on a free Colab T4 and
+downloads the results as a zip.
 
 ## Results
 

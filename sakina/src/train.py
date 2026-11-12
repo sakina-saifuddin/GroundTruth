@@ -91,7 +91,11 @@ def train_model(config: dict[str, Any]) -> dict[str, Any]:
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = FrozenBertClassifier(num_labels=int(config.get("num_labels", 8)), model_name=model_name)
+    model = FrozenBertClassifier(
+        num_labels=int(config.get("num_labels", 8)),
+        model_name=model_name,
+        pooling=str(config.get("pooling", "mean")),
+    )
     trainable_parameters = model.count_trainable_params()
     expected_parameters = 768 * int(config.get("num_labels", 8)) + int(config.get("num_labels", 8))
     if trainable_parameters != expected_parameters:

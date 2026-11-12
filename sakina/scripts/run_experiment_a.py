@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -23,7 +24,17 @@ from sakina.src.train import train_model  # noqa: E402
 
 def main() -> None:
     """Train Experiment A, evaluate its best checkpoint, and save measured scores."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--pooling",
+        choices=("mean", "pooler"),
+        default="mean",
+        help="mean = version 2 (results_mean_pooling); pooler = version 1 (results).",
+    )
+    pooling = parser.parse_args().pooling
+    results_root = ROOT / "sakina" / ("results_mean_pooling" if pooling == "mean" else "results")
     config = {
+        "pooling": pooling,
         "experiment_name": "experiment_a",
         "train_csv": str(ROOT / "data" / "processed" / "train.csv"),
         "val_csv": str(ROOT / "data" / "processed" / "val.csv"),
@@ -38,7 +49,7 @@ def main() -> None:
         "patience": 5,
         "use_class_weights": True,
         "checkpoint_dir": str(ROOT / "sakina" / "checkpoints"),
-        "results_dir": str(ROOT / "sakina" / "results_mean_pooling" / "experiment_a"),
+        "results_dir": str(results_root / "experiment_a"),
         "seed": 42,
         "num_labels": 8,
     }
@@ -50,7 +61,11 @@ def main() -> None:
     label_names = [labels["id2label"][str(index)] for index in range(config["num_labels"])]
     training = train_model(config)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = FrozenBertClassifier(num_labels=config["num_labels"], model_name=config["model_name"])
+    model = FrozenBertClassifier(
+        num_labels=config["num_labels"],
+        model_name=config["model_name"],
+        pooling=pooling,
+    )
     checkpoint = torch.load(training["checkpoint_path"], map_location=device, weights_only=True)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)
@@ -65,8 +80,8 @@ def main() -> None:
     results["training_history"] = training["history"]
     save_results(results, config["results_dir"], config["experiment_name"])
     generate_comparison(
-        ROOT / "sakina" / "results_mean_pooling",
-        ROOT / "sakina" / "results_mean_pooling" / "comparison.md",
+        results_root,
+        results_root / "comparison.md",
     )
     print(
         f"Experiment A complete: best validation macro-F1={training['best_val_f1']:.4f} "

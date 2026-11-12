@@ -17,7 +17,8 @@ turns BERT's token vectors into one narrative vector differs.
 |---|---|---|
 | What the classifier sees | The `[CLS]` vector passed through BERT's pooler layer | The average of all real token vectors (padding ignored) |
 | Information used | One token; the rest are discarded | Every token in the narrative |
-| Code | `sakina/results/` (commit `4973713`) | `sakina/results_mean_pooling/` (this branch) |
+| Run with | `python sakina/scripts/run_experiment_a.py --pooling pooler` | `python sakina/scripts/run_experiment_a.py --pooling mean` (default) |
+| Results folder | `sakina/results/` | `sakina/results_mean_pooling/` |
 
 With BERT frozen, `[CLS]` is never trained to hold what this task needs, so its
 vector is a weak summary. Averaging all token vectors keeps information from the
@@ -44,6 +45,19 @@ whole narrative.
 | Other Outside Force Damage | 0.2740 | 0.2114 | 0.5091 | 0.5000 |
 | Other Incident Cause | 0.0000 | 0.0000 | 0.2807 | 0.2128 |
 | Incorrect Operation | 0.2286 | 0.2308 | 0.4364 | 0.3750 |
+
+## Figures
+
+Regenerate with `python sakina/scripts/make_comparison_figures.py`.
+
+- `reports/figures/overall_comparison.png`: test accuracy and macro-F1, all four runs.
+- `reports/figures/per_class_f1.png`: per-class test F1, all four runs.
+- `reports/figures/validation_curves.png`: validation macro-F1 per epoch.
+- Confusion matrices: `sakina/results*/experiment_*/confusion_matrix.png`.
+
+![Overall comparison](figures/overall_comparison.png)
+
+![Per-class F1](figures/per_class_f1.png)
 
 ## What the numbers show
 

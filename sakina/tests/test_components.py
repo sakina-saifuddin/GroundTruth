@@ -63,7 +63,10 @@ def test_model_freezes_bert_and_trains_exact_head():
 
         def forward(self, input_ids, **kwargs):
             batch_size = input_ids.shape[0]
-            return SimpleNamespace(pooler_output=torch.ones(batch_size, 768))
+            return SimpleNamespace(
+                pooler_output=torch.ones(batch_size, 768),
+                last_hidden_state=torch.ones(batch_size, input_ids.shape[1], 768),
+            )
 
     with patch("sakina.src.bert_model.BertModel.from_pretrained", return_value=FakeBert()):
         model = FrozenBertClassifier()
@@ -78,6 +81,45 @@ def test_model_freezes_bert_and_trains_exact_head():
     assert all(not parameter.requires_grad for parameter in model.bert.parameters())
     model.train()
     assert not model.bert.training
+
+
+def test_mean_pooling_ignores_padding_and_pooler_mode_uses_pooler_output():
+    """Mean pooling averages only real tokens; pooler mode reads pooler_output."""
+
+    class FakeBert(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.encoder_weight = nn.Parameter(torch.ones(1))
+            self.config = SimpleNamespace(hidden_size=768)
+
+        def forward(self, input_ids, **kwargs):
+            hidden = torch.zeros(1, 3, 768)
+            hidden[0, 0] = 2.0
+            hidden[0, 1] = 4.0
+            hidden[0, 2] = 100.0  # padding position, must be ignored
+            return SimpleNamespace(pooler_output=torch.full((1, 768), 7.0), last_hidden_state=hidden)
+
+    inputs = dict(
+        input_ids=torch.ones((1, 3), dtype=torch.long),
+        attention_mask=torch.tensor([[1, 1, 0]]),
+        token_type_ids=torch.zeros((1, 3), dtype=torch.long),
+    )
+    captured = {}
+    for mode in ("mean", "pooler"):
+        with patch("sakina.src.bert_model.BertModel.from_pretrained", return_value=FakeBert()):
+            model = FrozenBertClassifier(pooling=mode)
+
+        def record(x, store=captured, key=mode):
+            store[key] = x.detach().clone()
+            return x
+
+        model.classifier.forward = record
+        model(**inputs)
+    assert torch.allclose(captured["mean"], torch.full((1, 768), 3.0))
+    assert torch.allclose(captured["pooler"], torch.full((1, 768), 7.0))
+    with pytest.raises(ValueError):
+        with patch("sakina.src.bert_model.BertModel.from_pretrained", return_value=FakeBert()):
+            FrozenBertClassifier(pooling="max")
 
 
 class TwoClassDataset(Dataset):
@@ -198,7 +240,7 @@ def test_train_model_saves_best_checkpoint_and_history(monkeypatch, tmp_path):
             }
 
     class TinyClassifier(nn.Module):
-        def __init__(self, num_labels, model_name):
+        def __init__(self, num_labels, model_name, pooling="mean"):
             super().__init__()
             self.linear = nn.Linear(1, num_labels)
 

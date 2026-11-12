@@ -8,15 +8,23 @@ from transformers import BertModel
 
 
 class FrozenBertClassifier(nn.Module):
-    """Predict an incident cause from the mean-pooled token vectors of frozen BERT."""
+    """Predict an incident cause from pooled token vectors of frozen BERT.
+
+    ``pooling="mean"`` averages all real token vectors (version 2); ``pooling="pooler"``
+    uses BERT's pooler_output of the [CLS] token (version 1).
+    """
 
     def __init__(
         self,
         num_labels: int = 8,
         model_name: str = "bert-base-uncased",
+        pooling: str = "mean",
     ) -> None:
         """Load pretrained BERT, freeze its weights, and add a linear head."""
         super().__init__()
+        if pooling not in ("mean", "pooler"):
+            raise ValueError(f"pooling must be 'mean' or 'pooler', got {pooling!r}.")
+        self.pooling = pooling
         self.bert = BertModel.from_pretrained(model_name)
         for parameter in self.bert.parameters():
             parameter.requires_grad = False
@@ -41,6 +49,10 @@ class FrozenBertClassifier(nn.Module):
             token_type_ids=token_type_ids,
             return_dict=True,
         )
+        if self.pooling == "pooler":
+            if outputs.pooler_output is None:
+                raise RuntimeError("The loaded BERT model did not return pooler_output.")
+            return self.classifier(outputs.pooler_output)
         mask = attention_mask.unsqueeze(-1).to(outputs.last_hidden_state.dtype)
         summed = (outputs.last_hidden_state * mask).sum(dim=1)
         pooled = summed / mask.sum(dim=1).clamp(min=1e-9)

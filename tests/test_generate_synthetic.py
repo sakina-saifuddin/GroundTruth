@@ -22,7 +22,7 @@ class FakeModel:
         self.responses = iter(responses)
         self.prompts: list[str] = []
 
-    def generate_content(self, prompt: str):
+    def generate_content(self, prompt: str, **_kwargs):
         self.prompts.append(prompt)
         return type("Response", (), {"text": next(self.responses)})()
 

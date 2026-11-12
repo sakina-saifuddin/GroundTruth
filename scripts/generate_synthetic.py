@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import unicodedata
 import os
 import random
+import re
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -16,8 +19,15 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[1]
 SEED = 42
 TARGET_PER_CLASS = 300
-GENERATION_MODEL = "gemini-3.8-flash"
-SYNTHETIC_COLUMNS = ["narrative_clean", "CAUSE", "label", "source"]
+GENERATION_MODEL = "gemini-3.5-flash"
+GROQ_MODEL = "openai/gpt-oss-120b"
+DEFAULT_PROVIDER = "groq"
+# Short pause between calls; rate-limit errors are handled by backoff below.
+REQUEST_INTERVAL_SECONDS = 2
+MAX_API_RETRIES = 8
+TRANSIENT_ERROR_NAMES = {"ResourceExhausted", "DeadlineExceeded", "ServiceUnavailable", "InternalServerError",
+    "RateLimitError", "APITimeoutError", "APIConnectionError"}
+SYNTHETIC_COLUMNS =["narrative_clean", "CAUSE", "label", "source"]
 VALIDATION_CSV = ROOT / "data" / "experiment2" / "val.csv"
 TEST_CSV = ROOT / "data" / "experiment2" / "test.csv"
 
@@ -47,6 +57,22 @@ Rules:
 Narrative:"""
 
 
+_CHAR_MAP = {
+    "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": " - ", "−": "-",
+    "‘": "'", "’": "'", "“": '"', "”": '"', "…": "...",
+    "°": " degrees ", "×": "x",
+}
+
+
+def normalize_narrative(text: str) -> str:
+    """Replace typographic Unicode with plain ASCII so synthetic text matches real text."""
+    for char, replacement in _CHAR_MAP.items():
+        text = text.replace(char, replacement)
+    text = unicodedata.normalize("NFKC", text)  # e.g. narrow no-break space -> space
+    text = text.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[ 	]+", " ", text).strip()
+
+
 def _is_valid_narrative(
     narrative: str,
     cause: str,
@@ -65,6 +91,21 @@ def _is_valid_narrative(
     )
 
 
+def _generate_with_backoff(model: Any, prompt: str) -> Any:
+    """Call Gemini, waiting and retrying on rate-limit or transient errors."""
+    for retry in range(MAX_API_RETRIES + 1):
+        try:
+            return model.generate_content(prompt, request_options={"timeout": 120})
+        except Exception as error:  # noqa: BLE001 - classify by name to avoid hard dependency
+            transient = type(error).__name__ in TRANSIENT_ERROR_NAMES
+            if not transient or retry == MAX_API_RETRIES:
+                raise
+            match = re.search(r"(?:retry|try again) in ([\d.]+)s", str(error))
+            wait = float(match.group(1)) + 2 if match else 30.0
+            print(f"  {type(error).__name__}; waiting {wait:.0f}s (retry {retry + 1}/{MAX_API_RETRIES})")
+            time.sleep(wait)
+
+
 def generate_synthetic_narratives(
     cause: str,
     n: int,
@@ -72,6 +113,8 @@ def generate_synthetic_narratives(
     model: Any,
     *,
     stats: dict[str, int] | None = None,
+    existing: list[str] | None = None,
+    on_narrative: Callable[[str], None] | None = None,
 ) -> list[str]:
     """Generate validated narratives using examples from the training split only.
 
@@ -91,7 +134,7 @@ def generate_synthetic_narratives(
     rng = random.Random(SEED)
     normalized_real = {text.strip().lower() for text in real_examples}
     generated: list[str] = []
-    generated_normalized: set[str] = set()
+    generated_normalized: set[str] = {text.strip().lower() for text in existing or []}
     if stats is not None:
         stats.setdefault("failed_validation_attempts", 0)
         stats.setdefault("regenerated_narratives", 0)
@@ -99,9 +142,9 @@ def generate_synthetic_narratives(
     for _ in range(n):
         for attempt in range(4):
             examples = rng.sample(real_examples, 3)
-            response = model.generate_content(_prompt_for_narrative(cause, examples))
-            time.sleep(1)
-            narrative = response.text.strip() if response.text else ""
+            response = _generate_with_backoff(model, _prompt_for_narrative(cause, examples))
+            time.sleep(REQUEST_INTERVAL_SECONDS)
+            narrative = normalize_narrative(response.text) if response.text else ""
 
             if _is_valid_narrative(
                 narrative, cause, normalized_real, generated_normalized
@@ -110,13 +153,15 @@ def generate_synthetic_narratives(
                     stats["regenerated_narratives"] += 1
                 generated.append(narrative)
                 generated_normalized.add(narrative.lower())
+                if on_narrative is not None:
+                    on_narrative(narrative)
                 break
 
             if stats is not None:
                 stats["failed_validation_attempts"] += 1
         else:
             raise ValueError(
-                f"Gemini failed to produce a valid narrative for {cause} after "
+                f"The model failed to produce a valid narrative for {cause} after "
                 "four attempts."
             )
 
@@ -168,6 +213,50 @@ def _load_api_key() -> str:
             "your shell; do not put the key in source files."
         )
     return api_key
+
+
+class _GroqModel:
+    """Adapter giving a Groq chat model the generate_content(prompt) interface."""
+
+    def __init__(self, api_key: str, model_name: str) -> None:
+        try:
+            from groq import Groq
+        except ImportError as error:
+            raise ImportError("Install Groq support: pip install groq") from error
+        self._client = Groq(api_key=api_key)
+        self._model_name = model_name
+
+    def generate_content(self, prompt: str, request_options: dict[str, Any] | None = None) -> Any:
+        timeout = (request_options or {}).get("timeout", 120)
+        response = self._client.chat.completions.create(
+            model=self._model_name,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=1.0,
+            timeout=timeout,
+        )
+        return type("Response", (), {"text": response.choices[0].message.content or ""})()
+
+
+def _build_model(provider: str, groq_model: str = GROQ_MODEL) -> Any:
+    """Create the text-generation client for the chosen provider."""
+    if provider == "groq":
+        load_dotenv(ROOT / ".env")
+        api_key = os.environ.get("GROQ_API_KEY")
+        if not api_key:
+            raise EnvironmentError(
+                "GROQ_API_KEY is not set. Add it to the root .env file or set it "
+                "in your shell; do not put the key in source files."
+            )
+        return _GroqModel(api_key, groq_model)
+    try:
+        import google.generativeai as genai
+    except ImportError as error:
+        raise ImportError(
+            "Install the project requirements to use Gemini: "
+            "pip install -r requirements.txt"
+        ) from error
+    genai.configure(api_key=_load_api_key())
+    return genai.GenerativeModel(GENERATION_MODEL)
 
 
 def build_augmented_train(
@@ -278,31 +367,43 @@ def _generate_csv(
     train_path: Path,
     label_map_path: Path,
     synthetic_path: Path,
+    provider: str = DEFAULT_PROVIDER,
+    groq_model: str = GROQ_MODEL,
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     """Generate exactly enough validated text to reach the per-class target."""
     label2id = _read_label_map(label_map_path)
     train = _read_training_data(train_path, label2id)
-    api_key = _load_api_key()
-
-    try:
-        import google.generativeai as genai
-    except ImportError as error:
-        raise ImportError(
-            "Install the project requirements to use Gemini: "
-            "pip install -r requirements.txt"
-        ) from error
-
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(GENERATION_MODEL)
+    model = _build_model(provider, groq_model)
     counts = train["CAUSE"].value_counts()
     stats = {"failed_validation_attempts": 0, "regenerated_narratives": 0}
     generated_rows: list[dict[str, Any]] = []
 
+    # Resume: keep rows already saved by an earlier (interrupted) run.
+    synthetic_path.parent.mkdir(parents=True, exist_ok=True)
+    if synthetic_path.is_file() and synthetic_path.stat().st_size > 0:
+        generated_rows = pd.read_csv(synthetic_path).to_dict("records")
+        print(f"Resuming with {len(generated_rows)} saved synthetic narratives.")
+    else:
+        pd.DataFrame(columns=SYNTHETIC_COLUMNS).to_csv(synthetic_path, index=False)
+
     for cause in label2id:
         count = int(counts.get(cause, 0))
-        needed = max(0, TARGET_PER_CLASS - count)
+        existing = [r["narrative_clean"] for r in generated_rows if r["CAUSE"] == cause]
+        needed = max(0, TARGET_PER_CLASS - count - len(existing))
         if not needed:
             continue
+
+        def save_row(narrative: str, cause: str = cause) -> None:
+            row = {
+                "narrative_clean": narrative,
+                "CAUSE": cause,
+                "label": label2id[cause],
+                "source": "synthetic",
+            }
+            generated_rows.append(row)
+            pd.DataFrame([row], columns=SYNTHETIC_COLUMNS).to_csv(
+                synthetic_path, mode="a", header=False, index=False
+            )
         training_examples = train.loc[train["CAUSE"].eq(cause), "narrative_clean"].astype(str).tolist()
         if len(training_examples) < 3:
             raise ValueError(f"Not enough real training narratives to prompt class {cause}.")
@@ -314,23 +415,17 @@ def _generate_csv(
             training_examples,
             model,
             stats=class_stats,
+            existing=existing,
+            on_narrative=save_row,
         )
         stats["failed_validation_attempts"] += class_stats["failed_validation_attempts"]
         stats["regenerated_narratives"] += class_stats["regenerated_narratives"]
-        generated_rows.extend(
-            {
-                "narrative_clean": narrative,
-                "CAUSE": cause,
-                "label": label2id[cause],
-                "source": "synthetic",
-            }
-            for narrative in narratives
-        )
         print(f"Generated {len(narratives)} narratives for {cause}.")
+        used = groq_model if provider == "groq" else GENERATION_MODEL
+        with (synthetic_path.parent / "synthetic_generation_log.csv").open("a", encoding="utf-8") as log:
+            log.write(f"{used},{cause},{len(narratives)}\n")
 
     generated = pd.DataFrame(generated_rows, columns=SYNTHETIC_COLUMNS)
-    synthetic_path.parent.mkdir(parents=True, exist_ok=True)
-    generated.to_csv(synthetic_path, index=False)
     return generated, stats
 
 
@@ -357,9 +452,18 @@ def main() -> None:
         type=Path,
         default=ROOT / "data" / "experiment2" / "train.csv",
     )
+    parser.add_argument(
+        "--provider",
+        choices=["groq", "gemini"],
+        default=DEFAULT_PROVIDER,
+        help="Text-generation API to use (default: %(default)s).",
+    )
+    parser.add_argument("--groq-model", default=GROQ_MODEL, help="Groq model id (default: %(default)s).")
     args = parser.parse_args()
 
-    generated, stats = _generate_csv(args.train_csv, args.label_map, args.synthetic_csv)
+    generated, stats = _generate_csv(
+        args.train_csv, args.label_map, args.synthetic_csv, args.provider, args.groq_model
+    )
     print(f"Total synthetic narratives generated: {len(generated)}")
     print(f"Invalid responses rejected: {stats['failed_validation_attempts']}")
     print(f"Narratives regenerated after invalid responses: {stats['regenerated_narratives']}")

@@ -1,4 +1,7 @@
-"""Train and test Experiment B: oversampled training data without class weights."""
+"""Train and test Experiment B: oversampled training data without class weights.
+
+Reads the finished Experiment 2 files in data/experiment2/ (train.csv already holds
+the real training rows plus the validated synthetic rows)."""
 
 from __future__ import annotations
 
@@ -19,16 +22,15 @@ from sakina.src.bert_model import FrozenBertClassifier  # noqa: E402
 from sakina.src.comparison import generate_comparison  # noqa: E402
 from sakina.src.evaluate import evaluate_model, save_results  # noqa: E402
 from sakina.src.train import train_model  # noqa: E402
-from sakina.scripts.oversample import build_augmented_train  # noqa: E402
 
 
 def main() -> None:
-    """Build the augmented file, train Experiment B, and evaluate its test set."""
+    """Train Experiment B on data/experiment2 and evaluate its test set."""
     config = {
         "experiment_name": "experiment_b",
-        "train_csv": str(ROOT / "sakina" / "processed" / "augmented_train.csv"),
-        "val_csv": str(ROOT / "data" / "processed" / "val.csv"),
-        "test_csv": str(ROOT / "data" / "processed" / "test.csv"),
+        "train_csv": str(ROOT / "data" / "experiment2" / "train.csv"),
+        "val_csv": str(ROOT / "data" / "experiment2" / "val.csv"),
+        "test_csv": str(ROOT / "data" / "experiment2" / "test.csv"),
         "label_map": str(ROOT / "data" / "processed" / "label_map.json"),
         "model_name": "bert-base-uncased",
         "max_length": 512,
@@ -42,15 +44,7 @@ def main() -> None:
         "seed": 42,
         "num_labels": 8,
     }
-    synthetic_path = ROOT / "data" / "processed" / "synthetic_train.csv"
-    augmented_path = Path(config["train_csv"])
-    build_augmented_train(
-        ROOT / "data" / "processed" / "train.csv",
-        config["label_map"],
-        augmented_path,
-        synthetic_path,
-    )
-    for key in ("val_csv", "test_csv", "label_map"):
+    for key in ("train_csv", "val_csv", "test_csv", "label_map"):
         if not Path(config[key]).is_file():
             raise FileNotFoundError(f"Required Experiment B input not found: {config[key]}")
 

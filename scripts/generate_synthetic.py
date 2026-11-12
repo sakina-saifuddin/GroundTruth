@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[1]
 SEED = 42
 TARGET_PER_CLASS = 300
-GENERATION_MODEL = "gemini-1.5-flash"
+GENERATION_MODEL = "gemini-3.8-flash"
 SYNTHETIC_COLUMNS = ["narrative_clean", "CAUSE", "label", "source"]
 VALIDATION_CSV = ROOT / "data" / "experiment2" / "val.csv"
 TEST_CSV = ROOT / "data" / "experiment2" / "test.csv"

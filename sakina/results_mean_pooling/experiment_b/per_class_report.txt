@@ -1,0 +1,16 @@
+Evaluation report: experiment_b
+
+Accuracy: 0.602620
+Macro-F1: 0.531046
+Micro-F1: 0.602620
+
+Cause                                     Precision     Recall         F1    Support
+-------------------------------------------------------------------------------------
+EQUIPMENT FAILURE                            0.6746     0.7203     0.6967        118
+CORROSION FAILURE                            0.6195     0.7071     0.6604         99
+MATERIAL FAILURE OF PIPE OR WELD             0.4328     0.5088     0.4677         57
+EXCAVATION DAMAGE                            0.7544     0.7818     0.7679         55
+NATURAL FORCE DAMAGE                         0.6389     0.5111     0.5679         45
+OTHER OUTSIDE FORCE DAMAGE                   0.7059     0.3871     0.5000         31
+OTHER INCIDENT CAUSE                         0.2632     0.1786     0.2128         28
+INCORRECT OPERATION                          0.3913     0.3600     0.3750         25

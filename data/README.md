@@ -1,15 +1,14 @@
 # Shared data files
 
-The original PHMSA workbook belongs in `data/raw/`. It is the only input to
-Phase 1; the `Summary` sheet is metadata and is not used for modeling. Run
-`python scripts/prepare_data.py` from the repository root to regenerate the
-processed files. The split uses a fixed random seed of `42`.
+The original raw PHMSA CSV belongs in `data/raw/`. It is the only input to
+Phase 1. Run `python scripts/prepare_data.py` from the repository root to
+regenerate the processed files. The split uses a fixed random seed of `42`.
 
 ## Files
 
 | File | Contents |
 |---|---|
-| `raw/PHMSA_Gas_Transmission_Gathering_Merged_2002_Present.xlsx` | Public source workbook; do not edit the source copy. |
+| `raw/PHMSA_Raw_Unclean_2002_Present.csv` | Merged public PHMSA source data before narrative cleaning; do not edit the source copy. |
 | `processed/clean_full.csv` | All rows with a non-empty narrative, original source columns, cleaned narrative, and integer label. |
 | `processed/train.csv` | Training rows and model labels. |
 | `processed/val.csv` | Validation rows and model labels. |

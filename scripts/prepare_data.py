@@ -97,10 +97,25 @@ def run_pipeline(
     report_path: Path,
     figures_dir: Path,
 ) -> dict[str, object]:
-    """Validate, clean, split, and summarize the source workbook."""
-    raw, summary = read_source(input_path)
-    usable_raw = validate_source_facts(raw, summary)
+    """Validate, clean, split, and summarize the raw source CSV."""
+    raw = read_source(input_path)
+    usable_raw = validate_source_facts(raw)
     data, cleaning_changes = clean_dataset(usable_raw)
+    expected_cleaning_changes = {
+        "HTML entity unescaping": 5,
+        "HTML tag removal": 3,
+        "Whitespace normalization": 2519,
+        "lowercasing": 3044,
+        "Total rows changed by any cleaning": 3044,
+    }
+    for step, expected in expected_cleaning_changes.items():
+        actual = cleaning_changes[step]
+        status = "PASS" if actual == expected else "FAIL"
+        print(f"[{status}] Cleaning {step}: expected {expected:,}; found {actual:,}")
+        if actual != expected:
+            raise ValueError(
+                f"Raw CSV cleaning check failed for {step}: expected {expected}, found {actual}."
+            )
     splits, manifest = make_splits(data)
     weights_by_cause, weights_by_label = calculate_class_weights(splits["train"])
 
@@ -130,6 +145,7 @@ def run_pipeline(
     duplicate_count = int(data["narrative_clean"].duplicated(keep=False).sum() // 2)
     report = generate_base_report(
         raw_rows=len(raw),
+        uppercase_rows=int(raw["NARRATIVE"].astype(str).map(lambda text: text == text.upper()).sum()),
         data=data,
         splits=splits,
         changed=cleaning_changes,
@@ -150,7 +166,12 @@ def run_pipeline(
         print(f"  {cause}: {weight:.6f}")
     print(f"\nFixed random seed: {RANDOM_SEED}")
     print(f"Outputs written to {output_dir} and {report_path.parent}.")
-    return {"data": data, "splits": splits, "weights": weights_by_cause}
+    return {
+        "data": data,
+        "splits": splits,
+        "weights": weights_by_cause,
+        "cleaning_changes": cleaning_changes,
+    }
 
 
 def main() -> None:
@@ -159,8 +180,8 @@ def main() -> None:
     parser.add_argument(
         "--input",
         type=Path,
-        default=ROOT / "data" / "raw" / "PHMSA_Gas_Transmission_Gathering_Merged_2002_Present.xlsx",
-        help="Path to the PHMSA workbook.",
+        default=ROOT / "data" / "raw" / "PHMSA_Raw_Unclean_2002_Present.csv",
+        help="Path to the raw PHMSA CSV.",
     )
     parser.add_argument("--output-dir", type=Path, default=ROOT / "data" / "processed")
     parser.add_argument("--report", type=Path, default=ROOT / "reports" / "data_report.md")

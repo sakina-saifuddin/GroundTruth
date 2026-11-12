@@ -54,17 +54,14 @@ def clean_narrative(text: str) -> str:
     return text.strip().lower()
 
 
-def read_source(input_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load both workbook sheets so metadata is checked but never modeled."""
+def read_source(input_path: Path) -> pd.DataFrame:
+    """Load the raw PHMSA CSV. Returns the full dataframe."""
     if not input_path.is_file():
         raise FileNotFoundError(
-            f"Required input workbook not found: {input_path}. "
-            "Place the PHMSA workbook at data/raw/PHMSA_Gas_Transmission_Gathering_Merged_2002_Present.xlsx."
+            f"Required input file not found: {input_path}. "
+            "Place PHMSA_Raw_Unclean_2002_Present.csv at data/raw/."
         )
-
-    raw = pd.read_excel(input_path, sheet_name="Merged Dataset")
-    summary = pd.read_excel(input_path, sheet_name="Summary", header=None, dtype=str)
-    return raw, summary
+    return pd.read_csv(input_path, encoding="utf-8", low_memory=False)
 
 
 def _require(condition: bool, message: str) -> None:
@@ -73,100 +70,107 @@ def _require(condition: bool, message: str) -> None:
         raise ValueError(f"Source data check failed: {message}")
 
 
-def validate_source_facts(raw: pd.DataFrame, summary: pd.DataFrame) -> pd.DataFrame:
-    """Verify the workbook facts from the project brief before preparing data."""
-    _require(list(raw.columns) == SOURCE_COLUMNS, f"expected columns {SOURCE_COLUMNS}, got {list(raw.columns)}")
-    _require(raw.shape == (3027, 6), f"expected 3,027 rows and 6 columns, got {raw.shape}")
-    print(f"[PASS] Source sheet has {raw.shape[0]:,} rows and {raw.shape[1]} expected columns.")
+def _check_source_fact(
+    condition: bool,
+    name: str,
+    details: str,
+    *,
+    fatal: bool = True,
+) -> None:
+    """Print a source-data check and stop only when the failed check is critical."""
+    status = "PASS" if condition else "FAIL"
+    print(f"[{status}] {name}: {details}")
+    if fatal and not condition:
+        raise ValueError(f"Source data check failed: {name}: {details}")
+
+
+def validate_source_facts(raw: pd.DataFrame) -> pd.DataFrame:
+    """Verify the stated raw-CSV facts and return all usable rows unchanged."""
+    columns_match = list(raw.columns) == SOURCE_COLUMNS
+    _check_source_fact(
+        columns_match and raw.shape == (3044, 6),
+        "CSV shape and columns",
+        f"expected (3044, 6) and {SOURCE_COLUMNS}; got {raw.shape} and {list(raw.columns)}",
+    )
 
     blank_narrative = raw["NARRATIVE"].isna() | raw["NARRATIVE"].astype("string").str.strip().eq("")
-    empty_rows = raw.loc[blank_narrative]
-    _require(
-        len(empty_rows) == 1 and int(empty_rows.iloc[0]["REPORT_NUMBER"]) == 20030038,
-        "expected the sole empty narrative to be REPORT_NUMBER 20030038",
+    empty_count = int(blank_narrative.sum())
+    _check_source_fact(
+        empty_count == 0,
+        "Empty narratives",
+        f"expected 0; found {empty_count}",
     )
-    _require(
-        int(empty_rows.iloc[0]["IYEAR"]) == 2003
-        and str(empty_rows.iloc[0]["CAUSE"]).strip().upper() == "EXCAVATION DAMAGE",
-        "empty-narrative record year or cause does not match the project brief",
-    )
-    print("[PASS] Exactly one empty narrative exists: REPORT_NUMBER 20030038 (2003, EXCAVATION DAMAGE).")
 
     years = pd.to_numeric(raw["IYEAR"], errors="raise")
     early = raw.loc[years.eq(2001)]
-    _require(
-        years.min() == 2001
-        and years.max() == 2026
-        and len(early) == 1
-        and int(early.iloc[0]["REPORT_NUMBER"]) == 20040073,
-        "expected year range 2001-2026 and the single 2001 report 20040073",
+    early_report_ok = (
+        len(early) == 1
+        and int(early.iloc[0]["REPORT_NUMBER"]) == 20040073
+        and str(early.iloc[0]["NAME"]).strip().upper().startswith("AQUILA SOUTHWEST")
+        and str(early.iloc[0]["CAUSE"]).strip().upper() == "EXCAVATION DAMAGE"
     )
-    early_narrative = str(early.iloc[0]["NARRATIVE"]).lower()
-    _require(
-        "11-7-2001" in early_narrative
-        and "1-21-02" in early_narrative
-        and "discovered 24" in early_narrative,
-        "the 2001 narrative does not contain the stated incident and discovery dates",
-    )
-    _require(years.eq(2026).any(), "expected at least one record in the partial 2026 year")
-    print(
-        f"[PASS] IYEAR spans {int(years.min())}-{int(years.max())}; report 20040073 is the sole 2001 record. "
-        f"The 2026 snapshot contains {int(years.eq(2026).sum())} records."
+    early_narrative = str(early.iloc[0]["NARRATIVE"]).lower() if len(early) == 1 else ""
+    dates_ok = "11-7-2001" in early_narrative and "1-21-02" in early_narrative
+    year_ok = years.min() == 2001 and years.max() == 2026 and early_report_ok and dates_ok
+    _check_source_fact(
+        year_ok,
+        "Year range and 2001 incident",
+        f"range {years.min()}-{years.max()}; 2001 reports {early['REPORT_NUMBER'].tolist()}; "
+        f"operator {early.iloc[0]['NAME'] if len(early) == 1 else 'missing'}; "
+        "expected report 20040073 (AQUILA SOUTHWEST, EXCAVATION DAMAGE) with 11-7-2001 "
+        "incident and 1-21-02 discovery dates",
     )
 
-    summary_text = " ".join(summary.fillna("").astype(str).to_numpy().ravel()).lower()
-    _require(
-        "lowercase" in summary_text or "lower case" in summary_text,
-        "Summary sheet does not document lowercase narratives",
+    year_2026_count = int(years.eq(2026).sum())
+    _check_source_fact(
+        year_2026_count == 88,
+        "Partial 2026 snapshot",
+        f"expected 88; found {year_2026_count}",
     )
-    _require(
-        "html" in summary_text and ("remov" in summary_text or "tag" in summary_text),
-        "Summary sheet does not document HTML removal",
-    )
-    _require(
-        ("whitespace" in summary_text or "white space" in summary_text)
-        and ("normal" in summary_text or "standard" in summary_text or "clean" in summary_text),
-        "Summary sheet does not document normalized whitespace",
-    )
-    nonempty_text = raw.loc[~blank_narrative, "NARRATIVE"].astype(str)
-    _require(nonempty_text.map(lambda text: text == text.lower()).all(), "source narratives are not all lowercase")
-    _require(
-        nonempty_text.map(lambda text: HTML_TAG_RE.search(text) is None).all(),
-        "source narratives still contain an HTML tag",
-    )
-    _require(
-        nonempty_text.map(lambda text: WHITESPACE_RE.sub(" ", text) == text).all(),
-        "source narratives contain non-normalized whitespace",
-    )
-    print("[PASS] Summary documents lowercase text, removed HTML, and normalized whitespace; narratives match.")
 
-    _require(
-        all(any(symbol in text for text in nonempty_text) for symbol in ("<450psig", "<20 ft", "<1mcf")),
-        "one or more literal less-than examples are missing from the narratives",
+    causes = raw["CAUSE"].dropna().astype(str)
+    _check_source_fact(
+        causes.nunique() == 8 and set(causes) == set(LABELS),
+        "Cause labels",
+        f"found {causes.nunique()} distinct values; exact label-set match: {set(causes) == set(LABELS)}",
     )
-    print("[PASS] Literal less-than examples are present and are not matched as HTML tags.")
 
-    causes = raw["CAUSE"].dropna().astype(str).str.strip().str.upper()
-    _require(causes.nunique() == 8 and causes.isin(LABELS).all(), "expected exactly the eight known cause labels")
-    print("[PASS] Exactly eight expected cause labels are present.")
+    report_numbers_unique = raw["REPORT_NUMBER"].is_unique
+    _check_source_fact(
+        report_numbers_unique,
+        "Unique report numbers",
+        f"duplicate count: {int(raw['REPORT_NUMBER'].duplicated().sum())}",
+    )
 
-    by_report = raw.set_index("REPORT_NUMBER")
-    duplicate_groups = raw.dropna(subset=["NARRATIVE"]).groupby("NARRATIVE")["REPORT_NUMBER"].apply(list)
+    duplicate_groups = raw.groupby("NARRATIVE", sort=False)["REPORT_NUMBER"].apply(list)
     duplicate_groups = [sorted(map(int, group)) for group in duplicate_groups if len(group) > 1]
     expected_groups = [sorted(pair) for pair in EXPECTED_DUPLICATE_PAIRS]
-    _require(
+    _check_source_fact(
         sorted(duplicate_groups) == sorted(expected_groups),
-        f"expected exactly the three stated exact-duplicate narrative pairs, got {duplicate_groups}",
+        "Duplicate narrative pairs",
+        f"expected {expected_groups}; found {duplicate_groups}",
     )
-    for first, second in EXPECTED_DUPLICATE_PAIRS:
-        _require(
-            first in by_report.index and second in by_report.index
-            and by_report.loc[first, "CAUSE"] == by_report.loc[second, "CAUSE"],
-            f"duplicate reports {first}/{second} do not exist with the same cause",
-        )
-    print("[PASS] Exactly three duplicate narrative pairs match the listed report numbers and causes.")
 
-    return raw.loc[~blank_narrative].copy().reset_index(drop=True)
+    narratives = raw["NARRATIVE"].astype(str)
+    uppercase_count = int(narratives.map(lambda text: text == text.upper()).sum())
+    _check_source_fact(
+        uppercase_count == len(raw),
+        "Narratives are all uppercase",
+        f"{uppercase_count}/{len(raw)} are uppercase; {len(raw) - uppercase_count} are not",
+        fatal=False,
+    )
+
+    after_unescape = narratives.map(html.unescape)
+    after_tags = after_unescape.map(lambda text: HTML_TAG_RE.sub(" ", text))
+    after_whitespace = after_tags.map(lambda text: WHITESPACE_RE.sub(" ", text).strip())
+    whitespace_rows = int(after_tags.ne(after_whitespace).sum())
+    _check_source_fact(
+        whitespace_rows > 0,
+        "Narratives contain extra whitespace",
+        f"whitespace normalization will change {whitespace_rows} rows",
+    )
+
+    return raw.copy().reset_index(drop=True)
 
 
 def clean_dataset(raw: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
@@ -181,9 +185,9 @@ def clean_dataset(raw: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
     changed = {
         "HTML entity unescaping": int(original.ne(after_unescape).sum()),
         "HTML tag removal": int(after_unescape.ne(after_tags).sum()),
-        "whitespace normalization and trimming": int(after_tags.ne(after_whitespace).sum()),
+        "Whitespace normalization": int(after_tags.ne(after_whitespace).sum()),
         "lowercasing": int(after_whitespace.ne(after_lower).sum()),
-        "rows changed by any cleaning": int(original.ne(after_lower).sum()),
+        "Total rows changed by any cleaning": int(original.ne(after_lower).sum()),
     }
 
     data["narrative_clean"] = data["NARRATIVE"].map(clean_narrative)
@@ -292,6 +296,7 @@ def class_distribution_table(data: pd.DataFrame, splits: dict[str, pd.DataFrame]
 
 def generate_base_report(
     raw_rows: int,
+    uppercase_rows: int,
     data: pd.DataFrame,
     splits: dict[str, pd.DataFrame],
     changed: dict[str, int],
@@ -310,9 +315,6 @@ def generate_base_report(
     count_text = " / ".join(
         f"{name}: {len(splits[name]):,}" for name in ("train", "val", "test")
     )
-    year_counts = data["IYEAR"].value_counts()
-    if isinstance(year_counts.index, pd.Index):
-        year_counts.index = pd.to_numeric(year_counts.index)
     weight_rows = "\n".join(
         f"| {cause} | {int(splits['train']['CAUSE'].eq(cause).sum())} | {weight:.12g} |"
         for cause, weight in weights.items()
@@ -330,16 +332,17 @@ This report is generated by `python scripts/prepare_data.py`. The modeling input
 
 ## 1. Source and row counts
 
-- Source: public PHMSA Gas Transmission and Gathering Incident Data workbook, `Merged Dataset` sheet; the `Summary` sheet is metadata only.
+- Source: raw public PHMSA Gas Transmission and Gathering Incident Data CSV.
 - Rows read: {raw_rows:,}.
-- Empty-narrative record removed: REPORT_NUMBER 20030038.
-- Usable rows after removal: {len(data):,}.
+- Empty narratives removed: 0.
+- Usable rows: {len(data):,}.
+- Narratives fully uppercase in the source: {uppercase_rows:,} of {raw_rows:,}; the remaining {raw_rows - uppercase_rows:,} are also lowercased during cleaning.
 
 ## 2. Years
 
 - Year range: {int(data['IYEAR'].min())}–{int(data['IYEAR'].max())}.
-- The sole 2001 record is REPORT_NUMBER 20040073. Its narrative states the pipe was hit on 11-7-2001 and discovered in January 2002, so it remains in the dataset.
-- 2026 is a partial-year snapshot; it contains {int(data['IYEAR'].eq(2026).sum())} records in this workbook.
+- The sole 2001 record is REPORT_NUMBER 20040073 (AQUILA SOUTHWEST, EXCAVATION DAMAGE). Its narrative states the pipe was hit on 11-7-2001 and discovered on 1-21-02 (January 21, 2002), so it remains in the dataset.
+- 2026 is a partial-year snapshot; it contains {int(data['IYEAR'].eq(2026).sum())} records in this CSV.
 
 ## 3. Cleaning
 

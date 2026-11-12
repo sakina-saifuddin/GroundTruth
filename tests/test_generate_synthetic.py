@@ -121,3 +121,12 @@ def test_generation_rejects_cause_name_and_reports_exhausted_retries(monkeypatch
         )
 
     assert len(model.prompts) == 4
+
+
+def test_load_api_key_from_root_env_file(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text("GEMINI_API_KEY=unit-test-placeholder\n", encoding="utf-8")
+    monkeypatch.setattr(generator, "ROOT", tmp_path)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    assert generator._load_api_key() == "unit-test-placeholder"

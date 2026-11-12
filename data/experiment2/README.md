@@ -22,12 +22,13 @@ on the current Phase 1 training split. Synthetic narratives must be added to
 training data only; never use validation or test text to create synthetic
 examples.
 
-To generate the data, install the root `requirements.txt`, set a rotated
-Gemini API key in the `GEMINI_API_KEY` environment variable, then run
-`python scripts/generate_synthetic.py` from the repository root. The script
-uses only real examples from `data/experiment1/train.csv` in generation
-prompts, validates responses, checks for validation/test leakage, and writes
-the synthetic source file to `data/processed/synthetic_narratives.csv`.
+To generate the data, install the root `requirements.txt`, put a rotated
+Gemini API key in `GEMINI_API_KEY` in the repository-root `.env` file (or set
+the variable in your shell), then run `python scripts/generate_synthetic.py`
+from the repository root. `.env` is ignored by Git. The script uses only real
+examples from `data/experiment1/train.csv` in generation prompts, validates
+responses, checks for validation/test leakage, and writes the synthetic source
+file to `data/processed/synthetic_narratives.csv`.
 
 The generated files and measured row counts are not committed yet. Run the
 script with a valid key to create them and print the verified class

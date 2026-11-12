@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 SEED = 42
@@ -157,6 +158,18 @@ def _read_training_data(train_path: Path, label2id: dict[str, int]) -> pd.DataFr
     return train
 
 
+def _load_api_key() -> str:
+    """Load the Gemini key from the process environment or root .env file."""
+    load_dotenv(ROOT / ".env")
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise EnvironmentError(
+            "GEMINI_API_KEY is not set. Add it to the root .env file or set it in "
+            "your shell; do not put the key in source files."
+        )
+    return api_key
+
+
 def build_augmented_train(
     real_train_path: str | Path,
     synthetic_path: str | Path,
@@ -269,10 +282,7 @@ def _generate_csv(
     """Generate exactly enough validated text to reach the per-class target."""
     label2id = _read_label_map(label_map_path)
     train = _read_training_data(train_path, label2id)
-    if not os.environ.get("GEMINI_API_KEY"):
-        raise EnvironmentError(
-            "GEMINI_API_KEY is not set. Set it in your shell; do not put the key in source files."
-        )
+    api_key = _load_api_key()
 
     try:
         import google.generativeai as genai
@@ -282,7 +292,7 @@ def _generate_csv(
             "pip install -r requirements.txt"
         ) from error
 
-    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+    genai.configure(api_key=api_key)
     model = genai.GenerativeModel(GENERATION_MODEL)
     counts = train["CAUSE"].value_counts()
     stats = {"failed_validation_attempts": 0, "regenerated_narratives": 0}

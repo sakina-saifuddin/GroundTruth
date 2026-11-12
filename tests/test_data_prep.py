@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.prepare_data import run_pipeline  # noqa: E402
 from src.data_prep import LABELS, clean_narrative  # noqa: E402
 
-WORKBOOK = ROOT / "data" / "raw" / "PHMSA_Gas_Transmission_Gathering_Merged_2002_Present.xlsx"
+SOURCE_CSV = ROOT / "data" / "raw" / "PHMSA_Raw_Unclean_2002_Present.csv"
 
 
 @pytest.fixture(scope="module")
@@ -25,7 +25,7 @@ def prepared(tmp_path_factory):
     outputs = tmp_path / "processed"
     report = tmp_path / "reports" / "data_report.md"
     figures = tmp_path / "reports" / "figures"
-    result = run_pipeline(WORKBOOK, outputs, report, figures)
+    result = run_pipeline(SOURCE_CSV, outputs, report, figures)
     return result, outputs, report, figures
 
 
@@ -39,11 +39,18 @@ def test_dataset_size_and_cause_labels(prepared):
     """The cleaned dataset has the stated usable rows and label mapping."""
     result, outputs, _, _ = prepared
     data = pd.read_csv(outputs / "clean_full.csv")
-    assert len(data) == 3026
+    assert len(data) == 3044
     assert data["NARRATIVE"].notna().all()
+    assert not data["NARRATIVE"].astype("string").str.strip().eq("").any()
     assert data["narrative_clean"].ne("").all()
     assert data["CAUSE"].nunique() == 8
     assert set(data["label"]) == set(range(8))
+    assert sum(len(frame) for frame in result["splits"].values()) == 3044
+    assert result["cleaning_changes"]["lowercasing"] == 3044
+    assert result["cleaning_changes"]["Whitespace normalization"] == 2519
+    assert result["cleaning_changes"]["HTML entity unescaping"] == 5
+    assert result["cleaning_changes"]["HTML tag removal"] == 3
+    assert result["cleaning_changes"]["Total rows changed by any cleaning"] == 3044
 
     label_map = json.loads((outputs / "label_map.json").read_text(encoding="utf-8"))
     assert label_map["label2id"] == {cause: index for index, cause in enumerate(LABELS)}
@@ -87,7 +94,7 @@ def test_running_pipeline_twice_writes_identical_artifacts(prepared, tmp_path):
     second_outputs = tmp_path / "second" / "processed"
     second_report = tmp_path / "second" / "reports" / "data_report.md"
     second_figures = tmp_path / "second" / "reports" / "figures"
-    run_pipeline(WORKBOOK, second_outputs, second_report, second_figures)
+    run_pipeline(SOURCE_CSV, second_outputs, second_report, second_figures)
 
     for relative in (
         "clean_full.csv",

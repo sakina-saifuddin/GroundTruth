@@ -77,11 +77,11 @@ Each line is a small core sample: useful, but not the whole report. The model se
 
 ## Chapter 3 — Taking a core sample
 
-The supplied CSV contains 3,027 labeled narratives. Its columns are `REPORT_NUMBER`, `IYEAR`, `NAME`, `CAUSE`, `CAUSE_DETAILS`, and `NARRATIVE`. `NARRATIVE` is the model input; `CAUSE` is the label. `NAME` is present in the source data but is not printed with the excerpts above.
+The raw PHMSA CSV contains 3,044 rows. All 3,044 narratives are usable — no records were removed. Its columns are `REPORT_NUMBER`, `IYEAR`, `NAME`, `CAUSE`, `CAUSE_DETAILS`, and `NARRATIVE`. `NARRATIVE` is the model input; `CAUSE` is the label. `NAME` is present in the source data but is not printed with the excerpts above.
 
-The source is public [PHMSA Gas Transmission and Gathering Incident Data](https://www.phmsa.dot.gov/data-and-statistics/pipeline/pipeline-incident-20-year-trends), from the U.S. Department of Transportation’s Pipeline and Hazardous Materials Safety Administration (PHMSA). Pipeline operators submit the reports on Form PHMSA F 7100.2. The project merged the 2002–2009 historical file with the 2010–present file, removed rows without a narrative, and mapped older cause labels into the current eight categories.
+The source is public [PHMSA Gas Transmission and Gathering Incident Data](https://www.phmsa.dot.gov/data-and-statistics/pipeline/pipeline-incident-20-year-trends), from the U.S. Department of Transportation’s Pipeline and Hazardous Materials Safety Administration (PHMSA). Pipeline operators submit the reports on Form PHMSA F 7100.2. The project merged the 2002–2009 historical file with the 2010–present file and mapped older cause labels into the current eight categories. All records in this raw CSV have a usable narrative.
 
-One record with an empty narrative was removed, leaving 3,026 narratives.
+The source narratives are mostly uppercase and include extra whitespace. Five are not entirely uppercase; cleaning lowercases all rows.
 
 ### Incidents by cause
 
@@ -89,44 +89,43 @@ Counts and percentages below were computed from the supplied CSV. Percentages ar
 
 | Cause | Narratives | Share |
 |---|---:|---:|
-| Equipment Failure | 782 | 25.8% |
-| Corrosion Failure | 653 | 21.6% |
-| Material Failure of Pipe or Weld | 367 | 12.1% |
-| Excavation Damage | 360 | 11.9% |
+| Equipment Failure | 787 | 25.9% |
+| Corrosion Failure | 657 | 21.6% |
+| Material Failure of Pipe or Weld | 372 | 12.2% |
+| Excavation Damage | 362 | 11.9% |
 | Natural Force Damage | 301 | 9.9% |
-| Other Outside Force Damage | 208 | 6.9% |
-| Other Incident Cause | 192 | 6.3% |
-| Incorrect Operation | 164 | 5.4% |
-
-![Bar chart of the 3,027 narratives by cause class, with Equipment Failure the largest class and Incorrect Operation the smallest.](docs/images/chart-cause-counts.png)
+| Other Outside Force Damage | 210 | 6.9% |
+| Other Incident Cause | 190 | 6.2% |
+| Incorrect Operation | 165 | 5.4% |
 
 *Equipment Failure is the largest group in this file. Incorrect Operation is the smallest.*
 
 ### Incidents by year
 
-![Bar chart of supplied CSV incident counts by year, from 2001 through 2026.](docs/images/chart-incidents-by-year.png)
+![Bar chart of 3,044 supplied CSV incident counts by year, from 2001 through 2026.](reports/figures/incidents_by_year.png)
 
-*The CSV contains one 2001 record and 69 records from 2026. The 2026 count is a partial-year snapshot, not a full-year total.*
+*The CSV contains one 2001 record and 88 records from 2026. The 2026 count is a partial-year snapshot, not a full-year total.*
 
 ### Narrative length
 
-![Histogram of narrative length in words for all 3,027 narratives, with the median marked.](docs/images/chart-narrative-lengths.png)
+![Histogram of narrative length in words for all 3,044 cleaned narratives, with the median marked.](reports/figures/narrative_length_words.png)
 
-*Using the chart script’s whitespace-aware word count, the median narrative has 139 words and the mean is 171.1 words.*
+*Using whitespace-separated word counts, the median narrative has 136 words and the mean is 167.25 words.*
 
 ### The planned split
 
-Text was cleaned by removing HTML, fixing whitespace, and converting to lowercase. A stratified split keeps the cause proportions similar in each partition. “Stratified” means each split is sampled to preserve the class mix.
+Text is cleaned by unescaping HTML entities, removing real HTML tags, fixing whitespace, and converting to lowercase. A stratified split keeps the cause proportions similar in each partition. “Stratified” means each split is sampled to preserve the class mix.
 
 | Partition | Share | Narratives |
 |---|---:|---:|
-| Train | 70% | 2,118 |
-| Validation | 15% | 453 |
-| Test | 15% | 455 |
+| Train | 70% | 2,130 |
+| Validation | 15% | 456 |
+| Test | 15% | 458 |
+| Total | 100% | 3,044 |
 
-![Bar chart illustrating the earlier planned stratified split of 2,119 training, 454 validation, and 454 test narratives.](docs/images/chart-data-split.png)
+![Grouped bar chart of each incident cause in the train, validation, and test splits.](reports/figures/class_distribution_by_split.png)
 
-*This illustration shows the earlier approximate split. The prepared files use the exact sizes in the table above and are reproducible with seed 42.*
+*The files use a leakage-safe stratified split at the cleaned-narrative group level and are reproducible with seed 42.*
 
 ### Reproduce the data split
 
@@ -288,7 +287,7 @@ The chart generator is the only reproducible script currently present. Model tra
 - Frozen BERT trains fewer parameters than full fine-tuning, but may be less effective for this task. That is a possibility to test, not a result.
 - BERT-base-uncased accepts at most 512 tokens at a time. Longer narratives need a documented truncation or chunking policy.
 - Operators file the incident reports. Older cause labels were mapped to the current eight categories, so the labels reflect reporting and mapping choices.
-- The CSV has one `IYEAR` value of 2001 and 69 of 2026, despite its 2002–present filename and source-file description. The chart keeps those rows and reports the CSV as supplied; confirm whether those records belong in the intended modeling window.
+- The raw CSV has one `IYEAR` value of 2001 and 88 of 2026. The 2001 report describes an incident on 11-7-2001 discovered on 1-21-02; both it and the partial-year 2026 records are retained.
 - The per-class scores, model comparison, chosen best model, app URL, deploy recipe, and app screenshot remain TODOs.
 
 ## Chapter 9 — Crew and credits

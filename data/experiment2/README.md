@@ -1,8 +1,8 @@
 # Experiment 2 — AI-Assisted Smart Oversampling
 
-Training data: `train.csv` is pending; it will contain real and synthetic
-narratives after the separate synthetic-data generation step. Validation and
-test files are copies of the Phase 1 splits and must remain unchanged.
+Training data: `train.csv` is generated from the real Experiment 1 training
+split plus validated synthetic narratives. Validation and test files are copies
+of the Phase 1 splits and must remain unchanged.
 
 How to handle imbalance: **do not use class weights**. Use plain
 `torch.nn.CrossEntropyLoss()` with no weight argument.
@@ -22,9 +22,22 @@ on the current Phase 1 training split. Synthetic narratives must be added to
 training data only; never use validation or test text to create synthetic
 examples.
 
+To generate the data, install the root `requirements.txt`, put a rotated
+Gemini API key in `GEMINI_API_KEY` in the repository-root `.env` file (or set
+the variable in your shell), then run `python scripts/generate_synthetic.py`
+from the repository root. `.env` is ignored by Git. The script uses only real
+examples from `data/experiment1/train.csv` in generation prompts, validates
+responses, checks for validation/test leakage, and writes the synthetic source
+file to `data/processed/synthetic_narratives.csv`.
+
+The generated files and measured row counts are not committed yet. Run the
+script with a valid key to create them and print the verified class
+distribution. Do not copy an API key into source files or commit it.
+
 Files:
 
-- `train.csv`: **PENDING** — to be added after synthetic generation.
+- `train.csv`: **PENDING** — actual augmented count and class distribution
+  will be recorded after successful generation.
 - `val.csv`: 456 rows; same as Experiment 1.
 - `test.csv`: 458 rows; same as Experiment 1.
 

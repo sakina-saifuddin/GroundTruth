@@ -38,7 +38,7 @@ def main() -> None:
         "patience": 5,
         "use_class_weights": True,
         "checkpoint_dir": str(ROOT / "sakina" / "checkpoints"),
-        "results_dir": str(ROOT / "sakina" / "results" / "experiment_a"),
+        "results_dir": str(ROOT / "sakina" / "results_mean_pooling" / "experiment_a"),
         "seed": 42,
         "num_labels": 8,
     }
@@ -65,8 +65,8 @@ def main() -> None:
     results["training_history"] = training["history"]
     save_results(results, config["results_dir"], config["experiment_name"])
     generate_comparison(
-        ROOT / "sakina" / "results",
-        ROOT / "sakina" / "results" / "comparison.md",
+        ROOT / "sakina" / "results_mean_pooling",
+        ROOT / "sakina" / "results_mean_pooling" / "comparison.md",
     )
     print(
         f"Experiment A complete: best validation macro-F1={training['best_val_f1']:.4f} "

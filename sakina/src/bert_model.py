@@ -8,7 +8,7 @@ from transformers import BertModel
 
 
 class FrozenBertClassifier(nn.Module):
-    """Predict an incident cause from the pooled output of frozen BERT."""
+    """Predict an incident cause from the mean-pooled token vectors of frozen BERT."""
 
     def __init__(
         self,
@@ -34,16 +34,17 @@ class FrozenBertClassifier(nn.Module):
         attention_mask: torch.Tensor,
         token_type_ids: torch.Tensor,
     ) -> torch.Tensor:
-        """Encode a batch and classify each sequence using its pooled [CLS] output."""
+        """Encode a batch and classify each sequence using the attention-masked mean of its token vectors."""
         outputs = self.bert(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             return_dict=True,
         )
-        if outputs.pooler_output is None:
-            raise RuntimeError("The loaded BERT model did not return pooler_output.")
-        return self.classifier(outputs.pooler_output)
+        mask = attention_mask.unsqueeze(-1).to(outputs.last_hidden_state.dtype)
+        summed = (outputs.last_hidden_state * mask).sum(dim=1)
+        pooled = summed / mask.sum(dim=1).clamp(min=1e-9)
+        return self.classifier(pooled)
 
     def train(self, mode: bool = True) -> "FrozenBertClassifier":
         """Set head mode while keeping frozen BERT dropout disabled."""

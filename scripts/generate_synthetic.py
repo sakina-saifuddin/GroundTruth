@@ -13,10 +13,16 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import sys
+
 import pandas as pd
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.data_prep import clean_narrative  # noqa: E402  (same cleaning as the real data)
 SEED = 42
 TARGET_PER_CLASS = 300
 GENERATION_MODEL = "gemini-3.5-flash"
@@ -70,7 +76,7 @@ def normalize_narrative(text: str) -> str:
         text = text.replace(char, replacement)
     text = unicodedata.normalize("NFKC", text)  # e.g. narrow no-break space -> space
     text = text.encode("ascii", "ignore").decode("ascii")
-    return re.sub(r"[ 	]+", " ", text).strip()
+    return clean_narrative(text)  # HTML unescape/tags, whitespace, lowercase: identical to real data
 
 
 def _is_valid_narrative(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import unicodedata
 import os
 import random
 import re
@@ -54,6 +55,22 @@ Rules:
 - Return ONLY the narrative text, nothing else
 
 Narrative:"""
+
+
+_CHAR_MAP = {
+    "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": " - ", "−": "-",
+    "‘": "'", "’": "'", "“": '"', "”": '"', "…": "...",
+    "°": " degrees ", "×": "x",
+}
+
+
+def normalize_narrative(text: str) -> str:
+    """Replace typographic Unicode with plain ASCII so synthetic text matches real text."""
+    for char, replacement in _CHAR_MAP.items():
+        text = text.replace(char, replacement)
+    text = unicodedata.normalize("NFKC", text)  # e.g. narrow no-break space -> space
+    text = text.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[ 	]+", " ", text).strip()
 
 
 def _is_valid_narrative(
@@ -127,7 +144,7 @@ def generate_synthetic_narratives(
             examples = rng.sample(real_examples, 3)
             response = _generate_with_backoff(model, _prompt_for_narrative(cause, examples))
             time.sleep(REQUEST_INTERVAL_SECONDS)
-            narrative = response.text.strip() if response.text else ""
+            narrative = normalize_narrative(response.text) if response.text else ""
 
             if _is_valid_narrative(
                 narrative, cause, normalized_real, generated_normalized
